@@ -4,7 +4,7 @@ public enum PaymentStatus {
     INITIATED,PROCESSING,SUCCESS,FAILED,REFUNDED,PARTIALLY_REFUNDED,TIME_OUT;
 
     public boolean isTerminal(){
-        return this == SUCCESS || this == FAILED;
+        return this == TIME_OUT || this == REFUNDED || this == FAILED;
     }
 
     public boolean canTransitionTo(PaymentStatus newStatus) {
