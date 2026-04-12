@@ -19,9 +19,9 @@ public class User {
     Long id;
 
     String name;
-    @NotNull
-    @Column(unique = true)
+    @Column(nullable = false, unique = true)
     String email;
     String phone;
+    @Column(nullable = false)
     String paymentMethodToken;
 }

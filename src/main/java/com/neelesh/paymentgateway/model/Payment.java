@@ -27,7 +27,7 @@ public class Payment {
 
     String payeeId;
     String payerId;
-    String paymentMethod;
+    String paymentMethodId;
     Long amount;
     String currency;
     @Enumerated(EnumType.STRING)
