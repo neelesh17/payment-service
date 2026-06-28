@@ -2,6 +2,7 @@ package com.neelesh.paymentgateway.dto;
 
 import com.neelesh.paymentgateway.enums.PaymentStatus;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,6 +12,7 @@ import java.util.Map;
 @AllArgsConstructor
 @Getter
 @Setter
+@Builder
 public class PaymentResponse {
     String id;
     String payeeId;
