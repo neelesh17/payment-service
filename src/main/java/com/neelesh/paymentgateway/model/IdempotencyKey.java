@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class IdempotencyKey {
     @Id
+    @Column(name = "idempotency_key_value")
     String key;
     @Enumerated(EnumType.STRING)
     PaymentStatus status;
