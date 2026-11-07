@@ -4,6 +4,7 @@ import com.neelesh.paymentgateway.dto.PaymentRequest;
 import com.neelesh.paymentgateway.dto.PaymentResponse;
 import com.neelesh.paymentgateway.dto.RefundRequest;
 import com.neelesh.paymentgateway.enums.PaymentStatus;
+import com.neelesh.paymentgateway.exception.PaymentNotFoundException;
 import com.neelesh.paymentgateway.model.Payment;
 import com.neelesh.paymentgateway.repository.PaymentRepository;
 import lombok.AllArgsConstructor;
@@ -75,22 +76,22 @@ public class PaymentService {
     }
 
     public PaymentResponse getPaymentStatus(String id){
-        try {
-            Payment payment = paymentRepository.getReferenceById(id);
-            return PaymentResponse.builder()
-                    .payerId(payment.getPayerId())
-                    .amount(payment.getAmount())
-                    .currency(payment.getCurrency())
-                    .metadata(payment.getMetadata())
-                    .description(payment.getDescription())
-                    .id(payment.getId())
-                    .status(payment.getStatus())
-                    .payeeId(payment.getPayeeId())
-                    .createdAt(payment.getCreatedAt())
-                    .updatedAt(payment.getUpdatedAt()).build();
-        }catch (Exception e){
-            throw new RuntimeException(e);
+        Optional<Payment> payment = paymentRepository.findById(id);
+        if (payment.isEmpty()) {
+            throw new PaymentNotFoundException(id);
         }
+
+        return PaymentResponse.builder()
+                .payerId(payment.get().getPayerId())
+                .amount(payment.get().getAmount())
+                .currency(payment.get().getCurrency())
+                .metadata(payment.get().getMetadata())
+                .description(payment.get().getDescription())
+                .id(payment.get().getId())
+                .status(payment.get().getStatus())
+                .payeeId(payment.get().getPayeeId())
+                .createdAt(payment.get().getCreatedAt())
+                .updatedAt(payment.get().getUpdatedAt()).build();
     }
 
     public PaymentResponse intiateRefund(String id, String idempotencyKey, RefundRequest refundRequest){

@@ -25,7 +25,7 @@ public class IdempotencyService {
     Optional<PaymentResponse> getExistingResponse(String key){
         Object cachedResponse = redisTemplate.opsForValue().get(key);
         if(cachedResponse != null) {
-            return Optional.of((PaymentResponse) cachedResponse);
+            return Optional.of(objectMapper.convertValue(cachedResponse,PaymentResponse.class));
         }
         Optional<IdempotencyKey> idempotencyKey = idempotencyRepository.findById(key);
         if(idempotencyKey.isPresent()){
