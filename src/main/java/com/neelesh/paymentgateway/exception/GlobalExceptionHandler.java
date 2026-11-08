@@ -49,4 +49,22 @@ public class GlobalExceptionHandler{
 
         return new ResponseEntity<>(errorResponse, HttpStatus.SERVICE_UNAVAILABLE);
     }
+
+    @ExceptionHandler(InvalidPaymentStatusException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPaymentStatus(InvalidPaymentStatusException e, HttpServletRequest httpServletRequest) {
+        String traceId = UUID.randomUUID().toString();
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .errorCodeEnum(e.getErrorCode())
+                .message(e.getMessage())
+                .timestamp(Instant.now())
+                .errorCode(HttpStatus.CONFLICT.value())
+                .path(httpServletRequest.getRequestURI())
+                .traceId(traceId)
+                .build();
+
+        log.warn("{}: {}", traceId, httpServletRequest.getRequestURI(), e);
+
+        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+    }
 }

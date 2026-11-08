@@ -5,6 +5,7 @@ import com.neelesh.paymentgateway.dto.PaymentResponse;
 import com.neelesh.paymentgateway.dto.RefundRequest;
 import com.neelesh.paymentgateway.enums.ErrorCodes;
 import com.neelesh.paymentgateway.enums.PaymentStatus;
+import com.neelesh.paymentgateway.exception.InvalidPaymentStatusException;
 import com.neelesh.paymentgateway.exception.PaymentNotFoundException;
 import com.neelesh.paymentgateway.exception.ServiceTemporarilyUnavailableException;
 import com.neelesh.paymentgateway.model.Payment;
@@ -103,10 +104,10 @@ public class PaymentService {
     }
 
     public PaymentResponse intiateRefund(String id, String idempotencyKey, RefundRequest refundRequest){
+        boolean isLockAcquired =false;
         try{
             Optional<PaymentResponse> res = idempotencyService.getExistingResponse(idempotencyKey);
             if(res.isPresent()) return res.get();
-            boolean isLockAcquired =false;
             int reties=0;
             for(;reties<MAX_RETRIES && !isLockAcquired;reties++) {
 
@@ -115,36 +116,46 @@ public class PaymentService {
                 isLockAcquired = idempotencyService.tryAcquireLock(idempotencyKey);
                 if(!isLockAcquired) TimeUnit.SECONDS.sleep(SLEEP_BEFORE_RETRY);
             }
-            if(reties==MAX_RETRIES){
-                throw new RuntimeException("Error while aquirng lock");
+            if(!isLockAcquired){
+                throw new ServiceTemporarilyUnavailableException("Max retires exceeded while acquiring idempotency lock", ErrorCodes.LOCK_ACQUISITION_TIMEOUT);
             }
-            Payment payment = paymentRepository.getReferenceById(id);
-            if(payment.getStatus() == PaymentStatus.SUCCESS){
-                if(refundRequest.getAmount().equals(payment.getAmount())){
-                    payment.setStatus(PaymentStatus.REFUNDED);
+            res = idempotencyService.getExistingResponse(idempotencyKey);
+            if (res.isPresent()) return res.get();
+            Optional<Payment> payment = paymentRepository.findById(id);
+            if (payment.isEmpty()) {
+                throw new PaymentNotFoundException(id);
+            }
+            if(payment.get().getStatus() == PaymentStatus.SUCCESS){
+                if(refundRequest.getAmount().equals(payment.get().getAmount())){
+                    payment.get().setStatus(PaymentStatus.REFUNDED);
                 }else{
-                    payment.setStatus(PaymentStatus.PARTIALLY_REFUNDED);
+                    payment.get().setStatus(PaymentStatus.PARTIALLY_REFUNDED);
                 }
-                paymentRepository.save(payment);
-                ledgerService.recordRefund(payment, refundRequest.getAmount());
+                paymentRepository.save(payment.get());
+                ledgerService.recordRefund(payment.get(), refundRequest.getAmount());
                 PaymentResponse response = PaymentResponse.builder()
-                        .payerId(payment.getPayerId())
-                        .amount(payment.getAmount())
-                        .currency(payment.getCurrency())
-                        .metadata(payment.getMetadata())
+                        .payerId(payment.get().getPayerId())
+                        .amount(payment.get().getAmount())
+                        .currency(payment.get().getCurrency())
+                        .metadata(payment.get().getMetadata())
                         .description(refundRequest.getReason())
-                        .id(payment.getId())
-                        .status(payment.getStatus())
-                        .payeeId(payment.getPayeeId())
-                        .createdAt(payment.getCreatedAt())
-                        .updatedAt(payment.getUpdatedAt()).build();
-                idempotencyService.storeResponse(idempotencyKey, response,payment.getStatus());
+                        .id(payment.get().getId())
+                        .status(payment.get().getStatus())
+                        .payeeId(payment.get().getPayeeId())
+                        .createdAt(payment.get().getCreatedAt())
+                        .updatedAt(payment.get().getUpdatedAt()).build();
+                idempotencyService.storeResponse(idempotencyKey, response,payment.get().getStatus());
                 return response;
             }else{
-                throw new RuntimeException("Payment not succes, refund cannot be initaited");
+                throw new InvalidPaymentStatusException(payment.get().getStatus(),id);
             }
+        }catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ServiceTemporarilyUnavailableException("Lock retry interrupted", ErrorCodes.LOCK_INTERRUPTED, e);
         } finally {
-            idempotencyService.releaseLock(idempotencyKey);
+            if (isLockAcquired) {
+                idempotencyService.releaseLock(idempotencyKey);
+            }
         }
     }
 }

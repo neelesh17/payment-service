@@ -23,12 +23,8 @@ public class PaymentController {
             //placeholder
             @RequestHeader(value = "Payer-Id", required = true) String payerId
     ) {
-        try {
-            PaymentResponse response = paymentService.createPayment(paymentRequest, payerId, idempotencyKey);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("An error occurred while fetching user: " + e);
-        }
+        PaymentResponse response = paymentService.createPayment(paymentRequest, payerId, idempotencyKey);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{id}")
@@ -45,11 +41,7 @@ public class PaymentController {
             @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
             @RequestBody RefundRequest refundRequest
     ){
-        try{
             PaymentResponse response = paymentService.intiateRefund(id, idempotencyKey,refundRequest);
             return ResponseEntity.status(HttpStatus.OK).body(response);
-        }catch(Exception e){
-            return ResponseEntity.internalServerError().body("An error occurred while initiating refund: " + e);
-        }
     }
 }
