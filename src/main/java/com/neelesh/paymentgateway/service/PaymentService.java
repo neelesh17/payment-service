@@ -3,18 +3,23 @@ package com.neelesh.paymentgateway.service;
 import com.neelesh.paymentgateway.dto.PaymentRequest;
 import com.neelesh.paymentgateway.dto.PaymentResponse;
 import com.neelesh.paymentgateway.dto.RefundRequest;
+import com.neelesh.paymentgateway.enums.ErrorCodes;
 import com.neelesh.paymentgateway.enums.PaymentStatus;
 import com.neelesh.paymentgateway.exception.PaymentNotFoundException;
+import com.neelesh.paymentgateway.exception.ServiceTemporarilyUnavailableException;
 import com.neelesh.paymentgateway.model.Payment;
 import com.neelesh.paymentgateway.repository.PaymentRepository;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
 @AllArgsConstructor
+@Slf4j
 public class PaymentService {
 
     private final IdempotencyService idempotencyService;
@@ -27,8 +32,8 @@ public class PaymentService {
     public PaymentResponse createPayment(PaymentRequest req, String payerId, String idempotencyKey){
         Optional<PaymentResponse> res = idempotencyService.getExistingResponse(idempotencyKey);
         if(res.isPresent()) return res.get();
+        boolean isLockAcquired =false;
         try {
-            boolean isLockAcquired =false;
             int reties=0;
             for(;reties<MAX_RETRIES && !isLockAcquired;reties++) {
 
@@ -37,9 +42,12 @@ public class PaymentService {
                 isLockAcquired = idempotencyService.tryAcquireLock(idempotencyKey);
                 if(!isLockAcquired) TimeUnit.SECONDS.sleep(SLEEP_BEFORE_RETRY);
             }
-            if(reties==MAX_RETRIES){
-                throw new RuntimeException("Error while aquirng lock");
+            if(!isLockAcquired){
+                throw new ServiceTemporarilyUnavailableException("Max retires exceeded while acquiring idempotency lock", ErrorCodes.LOCK_ACQUISITION_TIMEOUT);
             }
+            res = idempotencyService.getExistingResponse(idempotencyKey);
+            if (res.isPresent()) return res.get();
+
             Payment payment = Payment.builder()
                     .payerId(payerId)
                     .payeeId(req.getPayeeId())
@@ -67,11 +75,11 @@ public class PaymentService {
             return response;
         }catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Lock retry interrupted", e);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new ServiceTemporarilyUnavailableException("Lock retry interrupted", ErrorCodes.LOCK_INTERRUPTED, e);
         } finally {
-            idempotencyService.releaseLock(idempotencyKey);
+            if (isLockAcquired) {
+                idempotencyService.releaseLock(idempotencyKey);
+            }
         }
     }
 
@@ -135,8 +143,6 @@ public class PaymentService {
             }else{
                 throw new RuntimeException("Payment not succes, refund cannot be initaited");
             }
-        }catch (Exception e) {
-            throw new RuntimeException(e);
         } finally {
             idempotencyService.releaseLock(idempotencyKey);
         }
