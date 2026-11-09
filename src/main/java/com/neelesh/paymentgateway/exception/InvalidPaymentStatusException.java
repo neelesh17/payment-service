@@ -27,6 +27,7 @@ public class InvalidPaymentStatusException extends RuntimeException {
         return switch (status) {
             case FAILED, TIME_OUT -> "Payment " + paymentId + " is " + status + "; refund cannot be initiated.";
             case REFUNDED -> "Payment " + paymentId + " is already refunded.";
+            // TODO: PARTIALLY_REFUNDED
             default -> "Payment " + paymentId + " is " + status + "; try again later.";
         };
     }
