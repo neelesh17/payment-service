@@ -4,9 +4,14 @@ import com.neelesh.paymentgateway.enums.ErrorCodes;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -23,17 +28,21 @@ import static java.util.stream.Collectors.toList;
 @NoArgsConstructor
 public class GlobalExceptionHandler{
 
+    private ErrorResponse buildErrorResponse(ErrorCodes errorCode, String msg, HttpStatus httpStatus, HttpServletRequest req, String traceId){
+        return ErrorResponse.builder()
+                .errorCodeEnum(errorCode)
+                .message(msg)
+                .timestamp(Instant.now())
+                .errorCode(httpStatus.value())
+                .path(req.getRequestURI())
+                .traceId(traceId)
+                .build();
+    }
+
     @ExceptionHandler(PaymentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePaymentNotFound(PaymentNotFoundException e, HttpServletRequest httpServletRequest) {
         String traceId = UUID.randomUUID().toString();
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .errorCodeEnum(ErrorCodes.PAYMENT_NOT_FOUND)
-                .message(e.getMessage())
-                .timestamp(Instant.now())
-                .errorCode(HttpStatus.NOT_FOUND.value())
-                .path(httpServletRequest.getRequestURI())
-                .traceId(traceId)
-                .build();
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.PAYMENT_NOT_FOUND, e.getMessage(), HttpStatus.NOT_FOUND, httpServletRequest, traceId);
         log.warn("{}: {}, {}", traceId, httpServletRequest.getRequestURI(), e.getMessage());
         return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
     }
@@ -42,14 +51,7 @@ public class GlobalExceptionHandler{
     public ResponseEntity<ErrorResponse> handleServiceTemporarilyUnavailable(ServiceTemporarilyUnavailableException e, HttpServletRequest httpServletRequest) {
         String traceId = UUID.randomUUID().toString();
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .errorCodeEnum(e.getErrorCode())
-                .message(e.getMessage())
-                .timestamp(Instant.now())
-                .errorCode(HttpStatus.SERVICE_UNAVAILABLE.value())
-                .path(httpServletRequest.getRequestURI())
-                .traceId(traceId)
-                .build();
+        ErrorResponse errorResponse = buildErrorResponse(e.getErrorCode(), e.getMessage(), HttpStatus.SERVICE_UNAVAILABLE, httpServletRequest, traceId);
 
         log.warn("{}: {}", traceId, httpServletRequest.getRequestURI(), e);
 
@@ -60,14 +62,7 @@ public class GlobalExceptionHandler{
     public ResponseEntity<ErrorResponse> handleInvalidPaymentStatus(InvalidPaymentStatusException e, HttpServletRequest httpServletRequest) {
         String traceId = UUID.randomUUID().toString();
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .errorCodeEnum(e.getErrorCode())
-                .message(e.getMessage())
-                .timestamp(Instant.now())
-                .errorCode(HttpStatus.CONFLICT.value())
-                .path(httpServletRequest.getRequestURI())
-                .traceId(traceId)
-                .build();
+        ErrorResponse errorResponse = buildErrorResponse(e.getErrorCode(), e.getMessage(), HttpStatus.CONFLICT, httpServletRequest, traceId);
 
         log.warn("{}: {}", traceId, httpServletRequest.getRequestURI(), e);
 
@@ -78,14 +73,7 @@ public class GlobalExceptionHandler{
     public ResponseEntity<ErrorResponse> handleMissingRequestHeader(MissingRequestHeaderException e, HttpServletRequest httpServletRequest) {
         String traceId = UUID.randomUUID().toString();
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .errorCodeEnum(ErrorCodes.MISSING_HEADER)
-                .message("Request header is missing")
-                .timestamp(Instant.now())
-                .errorCode(HttpStatus.BAD_REQUEST.value())
-                .path(httpServletRequest.getRequestURI())
-                .traceId(traceId)
-                .build();
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.MISSING_HEADER, "Request header is missing", HttpStatus.BAD_REQUEST, httpServletRequest, traceId);
 
         log.warn("{}: {}", traceId, httpServletRequest.getRequestURI(), e);
 
@@ -96,14 +84,7 @@ public class GlobalExceptionHandler{
     public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException e, HttpServletRequest httpServletRequest) {
         String traceId = UUID.randomUUID().toString();
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .errorCodeEnum(ErrorCodes.INVALID_JSON)
-                .message("Request body is not valid JSON")
-                .timestamp(Instant.now())
-                .errorCode(HttpStatus.BAD_REQUEST.value())
-                .path(httpServletRequest.getRequestURI())
-                .traceId(traceId)
-                .build();
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.INVALID_JSON, "Request body is not valid JSON", HttpStatus.BAD_REQUEST, httpServletRequest, traceId);
 
         log.warn("{}: {}", traceId, httpServletRequest.getRequestURI(), e);
 
@@ -137,51 +118,44 @@ public class GlobalExceptionHandler{
     public ResponseEntity<ErrorResponse> handleHttpRequestMethodNotSupported(HttpRequestMethodNotSupportedException e, HttpServletRequest httpServletRequest) {
         String traceId = UUID.randomUUID().toString();
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .errorCodeEnum(ErrorCodes.METHOD_NOT_ALLOWED)
-                .message("HTTP method not allowed")
-                .timestamp(Instant.now())
-                .errorCode(HttpStatus.METHOD_NOT_ALLOWED.value())
-                .path(httpServletRequest.getRequestURI())
-                .traceId(traceId)
-                .build();
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.METHOD_NOT_ALLOWED, "HTTP method not allowed", HttpStatus.METHOD_NOT_ALLOWED, httpServletRequest, traceId);
 
-        log.warn("{}: {}", traceId, httpServletRequest.getRequestURI(), e);
+        log.warn("{}: {}, {}", traceId, httpServletRequest.getRequestURI(), e.getMessage());
 
-        return new ResponseEntity<>(errorResponse, HttpStatus.METHOD_NOT_ALLOWED);
+        HttpMethod[] supportedMethods = e.getSupportedHttpMethods() != null
+                ? e.getSupportedHttpMethods().toArray(new HttpMethod[0])
+                : new HttpMethod[0];
+
+
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).allow(supportedMethods).body(errorResponse);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResourceFoundException(NoResourceFoundException e, HttpServletRequest httpServletRequest) {
         String traceId = UUID.randomUUID().toString();
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .errorCodeEnum(ErrorCodes.RESOURCE_NOT_FOUND)
-                .message("Resource not found")
-                .timestamp(Instant.now())
-                .errorCode(HttpStatus.NOT_FOUND.value())
-                .path(httpServletRequest.getRequestURI())
-                .traceId(traceId)
-                .build();
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.RESOURCE_NOT_FOUND, "Resource not found", HttpStatus.NOT_FOUND, httpServletRequest, traceId);
 
-        log.warn("{}: {}", traceId, httpServletRequest.getRequestURI(), e);
+        log.warn("{}: {}, {}", traceId, httpServletRequest.getRequestURI(), e.getMessage());
 
         return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler({TransientDataAccessException.class, DataAccessResourceFailureException.class, CannotCreateTransactionException.class})
+    public ResponseEntity<ErrorResponse> handleTransientDataAccessException(Exception e, HttpServletRequest httpServletRequest) {
+        String traceId = UUID.randomUUID().toString();
+
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.RESOURCE_UNAVAILABLE, "Resource unavailable. Please retry after sometime. Quote the trace ID when reporting it.", HttpStatus.SERVICE_UNAVAILABLE, httpServletRequest, traceId);
+        log.error("{}: {}", traceId, httpServletRequest.getRequestURI(), e);
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header("Retry-After", "30").body(errorResponse);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception e, HttpServletRequest httpServletRequest) {
         String traceId = UUID.randomUUID().toString();
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .errorCodeEnum(ErrorCodes.INTERNAL_ERROR)
-                .message("An unexpected error occurred. Quote the trace ID when reporting it.")
-                .timestamp(Instant.now())
-                .errorCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                .path(httpServletRequest.getRequestURI())
-                .traceId(traceId)
-                .build();
-
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.INTERNAL_ERROR, "An unexpected error occurred. Quote the trace ID when reporting it.", HttpStatus.INTERNAL_SERVER_ERROR, httpServletRequest, traceId);
         log.error("{}: {}", traceId, httpServletRequest.getRequestURI(), e);
 
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
