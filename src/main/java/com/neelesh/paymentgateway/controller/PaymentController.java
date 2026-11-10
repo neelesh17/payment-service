@@ -36,10 +36,10 @@ public class PaymentController {
     }
 
     @PostMapping("/{id}/refund")
-    public ResponseEntity<?> initateRefund(
+    public ResponseEntity<PaymentResponse> initateRefund(
             @PathVariable String id,
             @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
-            @RequestBody RefundRequest refundRequest
+            @Valid @RequestBody RefundRequest refundRequest
     ){
             PaymentResponse response = paymentService.intiateRefund(id, idempotencyKey,refundRequest);
             return ResponseEntity.status(HttpStatus.OK).body(response);

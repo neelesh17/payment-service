@@ -4,13 +4,14 @@ import com.neelesh.paymentgateway.enums.ErrorCodes;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -45,6 +46,14 @@ public class GlobalExceptionHandler{
         ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.PAYMENT_NOT_FOUND, e.getMessage(), HttpStatus.NOT_FOUND, httpServletRequest, traceId);
         log.warn("{}: {}, {}", traceId, httpServletRequest.getRequestURI(), e.getMessage());
         return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(RefundExceedsRemainingException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRefundRequest(RefundExceedsRemainingException e, HttpServletRequest httpServletRequest) {
+        String traceId = UUID.randomUUID().toString();
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.REFUND_EXCEEDS_REMAINING, e.getMessage(), HttpStatus.CONFLICT, httpServletRequest, traceId);
+        log.warn("{}: {}, {}", traceId, httpServletRequest.getRequestURI(), e.getMessage());
+        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(ServiceTemporarilyUnavailableException.class)
@@ -139,6 +148,17 @@ public class GlobalExceptionHandler{
         log.warn("{}: {}, {}", traceId, httpServletRequest.getRequestURI(), e.getMessage());
 
         return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(ConcurrencyFailureException.class)
+    public ResponseEntity<ErrorResponse> handleConcurrencyFailureException(ConcurrencyFailureException e, HttpServletRequest httpServletRequest) {
+        String traceId = UUID.randomUUID().toString();
+
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.CONCURRENT_MODIFICATION, "Concurrent modification detected", HttpStatus.CONFLICT, httpServletRequest, traceId);
+
+        log.warn("{}: {}, {}", traceId, httpServletRequest.getRequestURI(), e.getMessage());
+
+        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler({TransientDataAccessException.class, DataAccessResourceFailureException.class, CannotCreateTransactionException.class})

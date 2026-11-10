@@ -1,13 +1,11 @@
 package com.neelesh.paymentgateway.model;
 
 import com.neelesh.paymentgateway.enums.PaymentStatus;
-import io.lettuce.core.dynamic.annotation.CommandNaming;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -27,6 +25,9 @@ public class Payment {
     String payerId;
     String paymentMethodId;
     Long amount;
+    @Builder.Default
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    Long refundedAmount=0L;
     String currency;
     @Enumerated(EnumType.STRING)
     PaymentStatus status;

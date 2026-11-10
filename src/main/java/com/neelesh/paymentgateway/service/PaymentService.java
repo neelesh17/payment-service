@@ -6,6 +6,7 @@ import com.neelesh.paymentgateway.dto.RefundRequest;
 import com.neelesh.paymentgateway.enums.ErrorCodes;
 import com.neelesh.paymentgateway.enums.PaymentStatus;
 import com.neelesh.paymentgateway.exception.InvalidPaymentStatusException;
+import com.neelesh.paymentgateway.exception.RefundExceedsRemainingException;
 import com.neelesh.paymentgateway.exception.PaymentNotFoundException;
 import com.neelesh.paymentgateway.exception.ServiceTemporarilyUnavailableException;
 import com.neelesh.paymentgateway.model.Payment;
@@ -15,7 +16,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -26,7 +26,6 @@ public class PaymentService {
     private final IdempotencyService idempotencyService;
     private final PaymentProcessingService paymentProcessingService;
     private final PaymentRepository paymentRepository;
-    private final LedgerService ledgerService;
     private static final int MAX_RETRIES = 5;
     private static final int SLEEP_BEFORE_RETRY = 10;
 
@@ -54,6 +53,7 @@ public class PaymentService {
                     .payeeId(req.getPayeeId())
                     .description(req.getDescription())
                     .amount(req.getAmount())
+                    .refundedAmount(0L)
                     .currency(req.getCurrency())
                     .idempotencyKey(idempotencyKey)
                     .paymentMethodId(req.getPaymentMethodId())
@@ -64,6 +64,7 @@ public class PaymentService {
             PaymentResponse response = PaymentResponse.builder()
                     .payerId(processedPayment.getPayerId())
                     .amount(processedPayment.getAmount())
+                    .refundedAmount(processedPayment.getRefundedAmount())
                     .currency(processedPayment.getCurrency())
                     .metadata(processedPayment.getMetadata())
                     .description(processedPayment.getDescription())
@@ -93,6 +94,7 @@ public class PaymentService {
         return PaymentResponse.builder()
                 .payerId(payment.get().getPayerId())
                 .amount(payment.get().getAmount())
+                .refundedAmount(payment.get().getRefundedAmount())
                 .currency(payment.get().getCurrency())
                 .metadata(payment.get().getMetadata())
                 .description(payment.get().getDescription())
@@ -121,34 +123,23 @@ public class PaymentService {
             }
             res = idempotencyService.getExistingResponse(idempotencyKey);
             if (res.isPresent()) return res.get();
-            Optional<Payment> payment = paymentRepository.findById(id);
-            if (payment.isEmpty()) {
-                throw new PaymentNotFoundException(id);
-            }
-            if(payment.get().getStatus() == PaymentStatus.SUCCESS){
-                if(refundRequest.getAmount().equals(payment.get().getAmount())){
-                    payment.get().setStatus(PaymentStatus.REFUNDED);
-                }else{
-                    payment.get().setStatus(PaymentStatus.PARTIALLY_REFUNDED);
-                }
-                paymentRepository.save(payment.get());
-                ledgerService.recordRefund(payment.get(), refundRequest.getAmount());
-                PaymentResponse response = PaymentResponse.builder()
-                        .payerId(payment.get().getPayerId())
-                        .amount(payment.get().getAmount())
-                        .currency(payment.get().getCurrency())
-                        .metadata(payment.get().getMetadata())
-                        .description(refundRequest.getReason())
-                        .id(payment.get().getId())
-                        .status(payment.get().getStatus())
-                        .payeeId(payment.get().getPayeeId())
-                        .createdAt(payment.get().getCreatedAt())
-                        .updatedAt(payment.get().getUpdatedAt()).build();
-                idempotencyService.storeResponse(idempotencyKey, response,payment.get().getStatus());
-                return response;
-            }else{
-                throw new InvalidPaymentStatusException(payment.get().getStatus(),id);
-            }
+
+            Payment processedPayment = paymentProcessingService.processRefund(id, refundRequest.getAmount());
+            PaymentResponse response = PaymentResponse.builder()
+                    .payerId(processedPayment.getPayerId())
+                    .amount(processedPayment.getAmount())
+                    .refundedAmount(processedPayment.getRefundedAmount())
+                    .currency(processedPayment.getCurrency())
+                    .metadata(processedPayment.getMetadata())
+                    .description(refundRequest.getReason())
+                    .id(processedPayment.getId())
+                    .status(processedPayment.getStatus())
+                    .payeeId(processedPayment.getPayeeId())
+                    .createdAt(processedPayment.getCreatedAt())
+                    .updatedAt(processedPayment.getUpdatedAt()).build();
+            idempotencyService.storeResponse(idempotencyKey, response,processedPayment.getStatus());
+            return response;
+
         }catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ServiceTemporarilyUnavailableException("Lock retry interrupted", ErrorCodes.LOCK_INTERRUPTED, e);
