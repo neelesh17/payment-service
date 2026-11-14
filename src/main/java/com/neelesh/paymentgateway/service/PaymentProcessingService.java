@@ -2,10 +2,13 @@ package com.neelesh.paymentgateway.service;
 
 import com.neelesh.paymentgateway.enums.PaymentStatus;
 import com.neelesh.paymentgateway.exception.InvalidPaymentStatusException;
+import com.neelesh.paymentgateway.exception.PayerNotFoundException;
 import com.neelesh.paymentgateway.exception.PaymentNotFoundException;
 import com.neelesh.paymentgateway.exception.RefundExceedsRemainingException;
 import com.neelesh.paymentgateway.model.Payment;
+import com.neelesh.paymentgateway.model.User;
 import com.neelesh.paymentgateway.repository.PaymentRepository;
+import com.neelesh.paymentgateway.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +21,7 @@ import java.util.Random;
 public class PaymentProcessingService {
     private final LedgerService ledgerService;
     private final PaymentRepository paymentRepository;
+    private final UserRepository userRepository;
 
     private PaymentStatus callBankAPI(Payment payment){
         Random random = new Random();
@@ -35,7 +39,7 @@ public class PaymentProcessingService {
     }
 
     @Transactional
-    public Payment processRefund(String id, Long refundAmount){
+    public RefundResult processRefund(String id, Long refundAmount){
         Optional<Payment> payment = paymentRepository.findByIdForUpdate(id);
         if (payment.isEmpty()) {
             throw new PaymentNotFoundException(id);
@@ -49,10 +53,12 @@ public class PaymentProcessingService {
                 throw new RefundExceedsRemainingException(payment.get().getId(), payment.get().getAmount() - payment.get().getRefundedAmount());
             }
             payment.get().setRefundedAmount(payment.get().getRefundedAmount() + refundAmount);
-            //not neseccary because inside transaction a loaded entity is managed and changes flush at commit even without save
-            paymentRepository.save(payment.get());
             ledgerService.recordRefund(payment.get(), refundAmount);
-            return payment.get();
+            Optional<User> payer = userRepository.findById(payment.get().getPayerUserId());
+            if(payer.isEmpty()) {
+                throw new PayerNotFoundException(payment.get().getPayerUserId().toString());
+            }
+            return new RefundResult(payment.get(), payer.get().getUsername());
         }else{
             throw new InvalidPaymentStatusException(payment.get().getStatus(),id);
         }

@@ -78,6 +78,17 @@ public class GlobalExceptionHandler{
         return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(PayerNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePayerNotFound(PayerNotFoundException e, HttpServletRequest httpServletRequest) {
+        String traceId = UUID.randomUUID().toString();
+
+        ErrorResponse errorResponse = buildErrorResponse(ErrorCodes.PAYER_NOT_FOUND, e.getMessage(), HttpStatus.BAD_REQUEST, httpServletRequest, traceId);
+
+        log.warn("{}: {}, {}", traceId, httpServletRequest.getRequestURI(), e.getMessage());
+
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ErrorResponse> handleMissingRequestHeader(MissingRequestHeaderException e, HttpServletRequest httpServletRequest) {
         String traceId = UUID.randomUUID().toString();

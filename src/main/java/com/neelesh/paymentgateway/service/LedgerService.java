@@ -1,5 +1,6 @@
 package com.neelesh.paymentgateway.service;
 
+import com.neelesh.paymentgateway.enums.AccountType;
 import com.neelesh.paymentgateway.enums.LedgerType;
 import com.neelesh.paymentgateway.model.LedgerEntry;
 import com.neelesh.paymentgateway.model.Payment;
@@ -18,7 +19,8 @@ public class LedgerService {
         LedgerEntry credit = LedgerEntry.builder()
                 .payment(payment)
                 .currency(payment.getCurrency())
-                .accountId(payment.getPayeeId())
+                .accountId(payment.getPayeeReference())
+                .accountType(AccountType.EXTERNAL)
                 .description(payment.getDescription())
                 .amount(payment.getAmount())
                 .type(LedgerType.CREDIT).build();
@@ -26,7 +28,8 @@ public class LedgerService {
         LedgerEntry debit = LedgerEntry.builder()
                 .payment(payment)
                 .currency(payment.getCurrency())
-                .accountId(payment.getPayerId())
+                .accountId(payment.getPayerUserId().toString())
+                .accountType(AccountType.USER)
                 .description(payment.getDescription())
                 .amount(payment.getAmount())
                 .type(LedgerType.DEBIT).build();
@@ -38,7 +41,8 @@ public class LedgerService {
         LedgerEntry credit = LedgerEntry.builder()
                 .payment(payment)
                 .currency(payment.getCurrency())
-                .accountId(payment.getPayerId())
+                .accountId(payment.getPayerUserId().toString())
+                .accountType(AccountType.USER)
                 .description(payment.getDescription())
                 .amount(refundAmount)
                 .type(LedgerType.CREDIT).build();
@@ -46,7 +50,8 @@ public class LedgerService {
         LedgerEntry debit = LedgerEntry.builder()
                 .payment(payment)
                 .currency(payment.getCurrency())
-                .accountId(payment.getPayeeId())
+                .accountId(payment.getPayeeReference())
+                .accountType(AccountType.EXTERNAL)
                 .description(payment.getDescription())
                 .amount(refundAmount)
                 .type(LedgerType.DEBIT).build();

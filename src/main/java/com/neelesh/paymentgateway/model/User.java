@@ -9,7 +9,7 @@ import lombok.Setter;
 
 @Entity
 @AllArgsConstructor
-@Table(name = "user")
+@Table(name = "users")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,11 +17,14 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
-
+    @Column(nullable = false, unique = true)
+    String username;
     String name;
     @Column(nullable = false, unique = true)
     String email;
     String phone;
     @Column(nullable = false)
     String paymentMethodToken;
+    @Column(length = 2048)
+    String webhookUrl;
 }

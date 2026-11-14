@@ -14,11 +14,10 @@ import java.util.Map;
 @NoArgsConstructor
 public class PaymentResponse {
     String id;
-    String payeeId;
-    String payerId;
+    String payeeReference;
+    String payerUsername;
     Long amount;
     @Builder.Default
-    @NonNull
     Long refundedAmount = 0L;
     String currency;
     PaymentStatus status;

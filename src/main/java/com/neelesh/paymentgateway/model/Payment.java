@@ -20,9 +20,10 @@ import java.util.UUID;
 public class Payment {
     @Id
     String id;
-
-    String payeeId;
-    String payerId;
+    @Column(nullable = false)
+    String payeeReference;
+    @Column(nullable = false)
+    Long payerUserId;
     String paymentMethodId;
     Long amount;
     @Builder.Default

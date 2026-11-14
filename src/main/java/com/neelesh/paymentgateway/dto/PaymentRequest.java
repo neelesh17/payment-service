@@ -11,7 +11,7 @@ import java.util.Map;
 @Setter
 public class PaymentRequest {
     @NotBlank
-    String payeeId;
+    String payeeReference;
     @NotBlank
     String paymentMethodId;
     @Positive @NotNull

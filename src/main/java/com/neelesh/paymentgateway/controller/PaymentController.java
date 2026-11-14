@@ -17,13 +17,13 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @PostMapping
-    public ResponseEntity<?> createPayment(
+    public ResponseEntity<PaymentResponse> createPayment(
             @Valid @RequestBody PaymentRequest paymentRequest,
             @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
             //placeholder
-            @RequestHeader(value = "Payer-Id", required = true) String payerId
+            @RequestHeader(value = "Payer-Username", required = true) String payerUsername
     ) {
-        PaymentResponse response = paymentService.createPayment(paymentRequest, payerId, idempotencyKey);
+        PaymentResponse response = paymentService.createPayment(paymentRequest, payerUsername, idempotencyKey);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

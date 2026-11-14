@@ -1,5 +1,6 @@
 package com.neelesh.paymentgateway.model;
 
+import com.neelesh.paymentgateway.enums.AccountType;
 import com.neelesh.paymentgateway.enums.LedgerType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -25,6 +26,8 @@ public class LedgerEntry {
     @JoinColumn(name = "payment_id")
     Payment payment;
     String accountId;
+    @Enumerated(EnumType.STRING)
+    AccountType accountType;
     @Enumerated(EnumType.STRING)
     LedgerType type;
     Long amount;
